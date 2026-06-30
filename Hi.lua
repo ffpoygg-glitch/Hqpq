@@ -1,6 +1,7 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
 -- ไม่มีล็อกอิน | ปุ่มขยะกรอง 2 ID | ไม่ส่ง Webhook 
+-- ระบบยิงรีโมทเบิ้ลสมบูรณ์ + หน้าต่างดูขยะ RAW เลื่อนอิสระ
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -193,31 +194,38 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== ฟังก์ชันเล่นเพลง (Remote Event ตัวเติม + ตัวใหม่) ====================
+-- ==================== ฟังก์ชันเล่นเพลง (แก้ไขระบบยิงรีโมทเบิ้ลให้ติดทั้งคู่เด็ดขาด) ====================
 local function playMusicFromId(musicId)
     if not musicId or musicId == "" then
         warn("No music ID provided.")
         return false
     end
     
-    local args = { "ToolMusicText", musicId, "", [4] = true }
     local re = ReplicatedStorage:FindFirstChild("RE")
-    
     if re then
+        local success1, success2 = false, false
+        
         -- 1. ยิงผ่านรีโมทตัวเดิม (PlayerToolEvent)
         local event1 = re:FindFirstChild("PlayerToolEvent")
         if event1 then
-            pcall(function() event1:FireServer(unpack(args)) end)
+            local args1 = { "ToolMusicText", musicId, "", [4] = true }
+            success1 = pcall(function() event1:FireServer(unpack(args1)) end)
         end
         
-        -- 2. ยิงผ่านรีโมทตัวใหม่เพิ่มเข้ามาตามสั่ง (1NoMoto1rVehicle1s)
+        -- 2. ยิงผ่านรีโมทตัวใหม่ (1NoMoto1rVehicle1s) แยกทำงานเด็ดขาด ไม่ใช้ซ้ำ
         local event2 = re:FindFirstChild("1NoMoto1rVehicle1s")
         if event2 then
-            pcall(function() event2:FireServer(unpack(args)) end)
+            local args2 = { "ToolMusicText", musicId, "", [4] = true }
+            success2 = pcall(function() event2:FireServer(unpack(args2)) end)
         end
         
-        StatusLabel.Text = "🎵 กำลังเล่นเพลง ID: " .. musicId
-        return true
+        if success1 or success2 then
+            StatusLabel.Text = "🎵 กำลังเล่นเพลง ID: " .. musicId
+            return true
+        else
+            StatusLabel.Text = "❌ รีโมททำงานล้มเหลว"
+            return false
+        end
     else
         warn("RE not found in ReplicatedStorage")
         StatusLabel.Text = "❌ ไม่พบโฟลเดอร์ RE"
@@ -518,7 +526,7 @@ local ViewRawJunkBtn = Instance.new("TextButton", MainFrame)
 ViewRawJunkBtn.Size = UDim2.new(0.9, 0, 0, 34)
 ViewRawJunkBtn.Position = UDim2.new(0.05, 0, 0.75, 0)
 ViewRawJunkBtn.BackgroundColor3 = Color3.fromRGB(140, 20, 230)
-ViewRawJunkBtn.Text = "ดูข้อความ RAW ดิบของผู้เล่น (คัดลอกทันที)"
+ViewRawJunkBtn.Text = "ดูข้อความ RAW ดิบของผู้เล่น (หน้าต่างสี่เหลี่ยม)"
 ViewRawJunkBtn.Font = Enum.Font.GothamBold
 ViewRawJunkBtn.TextSize = 11
 ViewRawJunkBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -557,6 +565,75 @@ local tStroke = Instance.new("UIStroke", ToggleBtn)
 tStroke.Color = Color3.fromRGB(255, 215, 0)
 tStroke.Thickness = 1.5
 setDrag(ToggleBtn, ToggleBtn)
+
+-- ==================== หน้าต่างดูขยะแบบเต็มๆ (เลื่อนได้อิสระ แยกหน้าต่างย้อนกลับได้) ====================
+local JunkFrame = Instance.new("Frame", ScreenGui)
+JunkFrame.Size = UDim2.new(0, 340, 0, 360)
+JunkFrame.Position = UDim2.new(0.5, -170, 0.5, -180)
+JunkFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+JunkFrame.Visible = false
+JunkFrame.ZIndex = 5
+Instance.new("UICorner", JunkFrame).CornerRadius = UDim.new(0, 8)
+local jStroke = Instance.new("UIStroke", JunkFrame)
+jStroke.Color = Color3.fromRGB(140, 20, 230)
+jStroke.Thickness = 1.5
+
+local JunkTopBar = Instance.new("Frame", JunkFrame)
+JunkTopBar.Size = UDim2.new(1, 0, 0, 35)
+JunkTopBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+Instance.new("UICorner", JunkTopBar).CornerRadius = UDim.new(0, 8)
+setDrag(JunkFrame, JunkTopBar)
+
+local JunkTitle = Instance.new("TextLabel", JunkTopBar)
+JunkTitle.Size = UDim2.new(1, -10, 1, 0)
+JunkTitle.Position = UDim2.new(0, 12, 0, 0)
+JunkTitle.BackgroundTransparency = 1
+JunkTitle.Text = "RAW JUNK VIEWER (ดูขยะเต็มระบบ)"
+JunkTitle.TextColor3 = Color3.fromRGB(200, 100, 255)
+JunkTitle.Font = Enum.Font.GothamBold
+JunkTitle.TextSize = 12
+JunkTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local JunkScroll = Instance.new("ScrollingFrame", JunkFrame)
+JunkScroll.Size = UDim2.new(0.92, 0, 0, 220)
+JunkScroll.Position = UDim2.new(0.04, 0, 0.13, 0)
+JunkScroll.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+JunkScroll.BorderSizePixel = 0
+JunkScroll.ScrollBarThickness = 5
+JunkScroll.ScrollBarImageColor3 = Color3.fromRGB(140, 20, 230)
+Instance.new("UICorner", JunkScroll).CornerRadius = UDim.new(0, 5)
+
+local JunkTextLabel = Instance.new("TextLabel", JunkScroll)
+JunkTextLabel.Size = UDim2.new(1, -10, 0, 1000)
+JunkTextLabel.Position = UDim2.new(0, 5, 0, 5)
+JunkTextLabel.BackgroundTransparency = 1
+JunkTextLabel.Text = "ไม่มีข้อมูล..."
+JunkTextLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+JunkTextLabel.Font = Enum.Font.Code
+JunkTextLabel.TextSize = 11
+JunkTextLabel.TextXAlignment = Enum.TextXAlignment.Left
+JunkTextLabel.TextYAlignment = Enum.TextYAlignment.Top
+JunkTextLabel.TextWrapped = true
+
+local JunkCopyBtn = Instance.new("TextButton", JunkFrame)
+JunkCopyBtn.Size = UDim2.new(0.44, 0, 0, 35)
+JunkCopyBtn.Position = UDim2.new(0.04, 0, 0.85, 0)
+JunkCopyBtn.BackgroundColor3 = Color3.fromRGB(140, 20, 230)
+JunkCopyBtn.Text = "📋 คัดลอกทั้งหมด"
+JunkCopyBtn.Font = Enum.Font.GothamBold
+JunkCopyBtn.TextSize = 12
+JunkCopyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", JunkCopyBtn).CornerRadius = UDim.new(0, 6)
+
+local JunkBackBtn = Instance.new("TextButton", JunkFrame)
+JunkBackBtn.Size = UDim2.new(0.44, 0, 0, 35)
+JunkBackBtn.Position = UDim2.new(0.52, 0, 0.85, 0)
+JunkBackBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+JunkBackBtn.Text = "⬅️ ย้อนกลับ"
+JunkBackBtn.Font = Enum.Font.GothamBold
+JunkBackBtn.TextSize = 12
+JunkBackBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", JunkBackBtn).CornerRadius = UDim.new(0, 6)
 
 -- ==================== ฟังก์ชันรีเฟรชผู้เล่น ====================
 local function refreshPlayers()
@@ -627,6 +704,7 @@ GetJunkBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+-- ระบบเปิดหน้าต่างดูขยะเต็มๆ เลื่อนได้อิสระ
 ViewRawJunkBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
         local targetPlayer = Players:FindFirstChild(CurrentSelectedPlayer.Name)
@@ -636,12 +714,38 @@ ViewRawJunkBtn.MouseButton1Click:Connect(function()
             return 
         end
         
-        local rawSoundId = soundObjects[1].SoundId or ""
-        copyToClipboard(rawSoundId)
-        StatusLabel.Text = "📋 ดึง RAW สำเร็จ! คัดลอกไปยังคลิปบอร์ดแล้ว: " .. string.sub(rawSoundId, 1, 35) .. "..."
+        -- รวบรวมข้อความขยะทั้งหมดมาแสดง
+        local fullJunkText = ""
+        for i, obj in ipairs(soundObjects) do
+            fullJunkText = fullJunkText .. string.format("[%d] %s\nID: %s\n\n", i, obj.Name, obj.SoundId)
+        end
+        
+        JunkTextLabel.Text = fullJunkText
+        
+        -- ปรับแต่งความสูงของพื้นที่เลื่อนตามจำนวนอักษรอัตโนมัติ
+        local textHeight = math.max(400, #fullJunkText * 0.45)
+        JunkScroll.CanvasSize = UDim2.new(0, 0, 0, textHeight)
+        
+        -- เปิดหน้าต่างขยะ
+        JunkFrame.Visible = true
+        StatusLabel.Text = "👁️ เปิดหน้าต่างแสดงขยะ RAW เต็มระบบแล้ว"
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดูขยะดิบ!"
     end
+end)
+
+-- ปุ่มคัดลอกในหน้าต่างขยะ
+JunkCopyBtn.MouseButton1Click:Connect(function()
+    if JunkTextLabel.Text ~= "ไม่มีข้อมูล..." then
+        copyToClipboard(JunkTextLabel.Text)
+        StatusLabel.Text = "📋 คัดลอกขยะ RAW ทั้งหมดไปคลิปบอร์ดแล้ว!"
+    end
+end)
+
+-- ปุ่มย้อนกลับ เพื่อมาหน้าเดิม
+JunkBackBtn.MouseButton1Click:Connect(function()
+    JunkFrame.Visible = false
+    StatusLabel.Text = "⬅️ ย้อนกลับมาหน้าต่างหลักแล้ว"
 end)
 
 WhitelistBtn.MouseButton1Click:Connect(function()
@@ -673,6 +777,7 @@ end)
 
 ToggleBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = not MainFrame.Visible
+    if not MainFrame.Visible then JunkFrame.Visible = false end -- ปิดคู่กันถ้าหุบเมนู
 end)
 
 task.spawn(function()
