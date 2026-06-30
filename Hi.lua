@@ -308,7 +308,7 @@ local function directLogMusicID(playerName)
         end
 
         if #extractedIds > 0 then
-            for _, id do
+            for _, id in ipairs(extractedIds) do
                 if BlockedIDs[id] then
                     totalBlocked = totalBlocked + 1
                 else
