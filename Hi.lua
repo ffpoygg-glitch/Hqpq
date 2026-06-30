@@ -2,6 +2,7 @@
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
 -- ไม่มีล็อกอิน | ปุ่มขยะกรอง 2 ID | ไม่ส่ง Webhook 
 -- ระบบยิงรีโมทเบิ้ลสมบูรณ์ + หน้าต่างดูขยะ RAW เลื่อนอิสระ
+-- ปรับปุ่มเจาะดึงไวปึ๊ปทันที (ตัดระบบเช็ค API และ 60 วิ ออก 100%)
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -194,7 +195,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== ฟังก์ชันเล่นเพลง (แก้ไขระบบยิงรีโมทเบิ้ลให้ติดทั้งคู่เด็ดขาด) ====================
+-- ==================== ฟังก์ชันเล่นเพลง (ระบบยิงรีโมทเบิ้ลคู่เด็ดขาด) ====================
 local function playMusicFromId(musicId)
     if not musicId or musicId == "" then
         warn("No music ID provided.")
@@ -212,7 +213,7 @@ local function playMusicFromId(musicId)
             success1 = pcall(function() event1:FireServer(unpack(args1)) end)
         end
         
-        -- 2. ยิงผ่านรีโมทตัวใหม่ (1NoMoto1rVehicle1s) แยกทำงานเด็ดขาด ไม่ใช้ซ้ำ
+        -- 2. ยิงผ่านรีโมทตัวใหม่ (1NoMoto1rVehicle1s) แยกทำงานเด็ดขาด
         local event2 = re:FindFirstChild("1NoMoto1rVehicle1s")
         if event2 then
             local args2 = { "ToolMusicText", musicId, "", [4] = true }
@@ -284,40 +285,14 @@ local function directLogRawJunk(playerName)
     return true
 end
 
--- ==================== ปุ่มเจาะ (ตรวจสอบ ID จริง) ====================
-local function getAssetInfoAsync(assetId, callback)
-    local httpRequest = getHttpRequest()
-    if not httpRequest then
-        callback(nil)
-        return
-    end
-    local url = "https://api.roblox.com/marketplace/productinfo?assetId=" .. tostring(assetId)
-    task.spawn(function()
-        local success, response = pcall(function()
-            return httpRequest({
-                Url = url,
-                Method = "GET",
-                Headers = {["Content-Type"] = "application/json"}
-            })
-        end)
-        if success and response and response.StatusCode == 200 and response.Body then
-            local data = HttpService:JSONDecode(response.Body)
-            if data then
-                callback({assetTypeId = data.AssetTypeId, duration = data.Duration or 0, name = data.Name or ""})
-                return
-            end
-        end
-        callback(nil)
-    end)
-end
-
+-- ==================== ปุ่มเจาะ (แก้ไขใหม่: ดึงปุ๊บได้ปั๊บ ไม่เช็ค API / ไม่เช็ค 60 วิ) ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
     if #soundObjects == 0 then return false end
 
-    local rawIds = {}
-    local totalFound = 0
+    local finalIds = {}
+    local seenIds = {}
     local totalBlocked = 0
 
     for _, soundObj in ipairs(soundObjects) do
@@ -333,84 +308,29 @@ local function directLogMusicID(playerName)
         end
 
         if #extractedIds > 0 then
-            for _, id in ipairs(extractedIds) do
-                totalFound = totalFound + 1
+            for _, id do
                 if BlockedIDs[id] then
                     totalBlocked = totalBlocked + 1
                 else
-                    table.insert(rawIds, id)
+                    if not seenIds[id] then
+                        seenIds[id] = true
+                        table.insert(finalIds, id)
+                    end
                 end
             end
         end
     end
 
-    if #rawIds == 0 then
-        StatusLabel.Text = "ไม่พบ ID ที่ไม่ถูกบล็อค (ถูกบล็อค " .. totalBlocked .. " ตัว)"
+    if #finalIds == 0 then
+        StatusLabel.Text = "ไม่พบ ID ที่ต้องการ (ถูกบล็อค " .. totalBlocked .. " ตัว)"
         return false
     end
 
-    local idData = {}
-    local pendingCount = 0
-    local completedCount = 0
-    local maxAttempts = 15
-
-    for _, id in ipairs(rawIds) do
-        if not idData[id] then
-            idData[id] = { checked = false, duration = 0, assetTypeId = nil, name = "" }
-            pendingCount = pendingCount + 1
-            getAssetInfoAsync(id, function(info)
-                if info then
-                    idData[id].duration = info.duration
-                    idData[id].assetTypeId = info.assetTypeId
-                    idData[id].name = info.name
-                else
-                    idData[id].duration = 0
-                    idData[id].assetTypeId = 0
-                end
-                idData[id].checked = true
-                completedCount = completedCount + 1
-            end)
-        end
-    end
-
-    local waitCount = 0
-    while completedCount < pendingCount and waitCount < maxAttempts do
-        task.wait(0.1)
-        waitCount = waitCount + 1
-    end
-
-    for id, info in pairs(idData) do
-        if not info.checked then
-            info.duration = 0
-            info.assetTypeId = 0
-            info.name = ""
-        end
-    end
-
-    local realIDs = {}
-    local fakeIDs = {}
-    for id, info in pairs(idData) do
-        if info.assetTypeId == 3 and info.duration >= 60 then
-            table.insert(realIDs, {id = id, len = info.duration, name = info.name})
-        else
-            table.insert(fakeIDs, {id = id, len = info.duration, typeId = info.assetTypeId})
-        end
-    end
-
-    local copyText = ""
-    if #realIDs > 0 then
-        for i, item in ipairs(realIDs) do
-            if i > 1 then copyText = copyText .. " " end
-            copyText = copyText .. item.id
-        end
-    elseif #fakeIDs > 0 then
-        copyText = fakeIDs[1].id
-    else
-        copyText = next(idData)
-    end
+    -- รวม ID ทั้งหมดคั่นด้วยเว้นวรรคแล้วโยนเข้าคลิปบอร์ดทันที
+    local copyText = table.concat(finalIds, " ")
     copyToClipboard(copyText)
 
-    StatusLabel.Text = "📋 เจาะเสร็จแล้ว! คัดลอก ID จริงทั้งหมดไปคลิปบอร์ดแล้ว"
+    StatusLabel.Text = "📋 ดึงเสร็จทันที! คัดลอก " .. #finalIds .. " ID ไปคลิปบอร์ดแล้ว"
     return true
 end
 
@@ -506,7 +426,7 @@ local GetIDBtn = Instance.new("TextButton", MainFrame)
 GetIDBtn.Size = UDim2.new(0.9, 0, 0, 34)
 GetIDBtn.Position = UDim2.new(0.05, 0, 0.59, 0)
 GetIDBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
-GetIDBtn.Text = "เจาะและดึงไอดีตามจริงทั้งหมด (Direct Log)"
+GetIDBtn.Text = "เจาะและดึงไอดีทันที (Instant Log)"
 GetIDBtn.Font = Enum.Font.GothamBold
 GetIDBtn.TextSize = 11
 GetIDBtn.TextColor3 = Color3.fromRGB(20, 20, 20)
@@ -566,7 +486,7 @@ tStroke.Color = Color3.fromRGB(255, 215, 0)
 tStroke.Thickness = 1.5
 setDrag(ToggleBtn, ToggleBtn)
 
--- ==================== หน้าต่างดูขยะแบบเต็มๆ (เลื่อนได้อิสระ แยกหน้าต่างย้อนกลับได้) ====================
+-- ==================== หน้าต่างดูขยะแบบเต็มๆ ====================
 local JunkFrame = Instance.new("Frame", ScreenGui)
 JunkFrame.Size = UDim2.new(0, 340, 0, 360)
 JunkFrame.Position = UDim2.new(0.5, -170, 0.5, -180)
@@ -683,8 +603,7 @@ end
 -- ==================== ปุ่มกดทำงาน ====================
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "🔍 กำลังเจาะ ID (รวมเสียงจากรถ)..."
-        task.wait(0.05)
+        StatusLabel.Text = "🔍 กำลังดึงข้อมูลทันที..."
         directLogMusicID(CurrentSelectedPlayer.Name)
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
@@ -704,7 +623,6 @@ GetJunkBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ระบบเปิดหน้าต่างดูขยะเต็มๆ เลื่อนได้อิสระ
 ViewRawJunkBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
         local targetPlayer = Players:FindFirstChild(CurrentSelectedPlayer.Name)
@@ -714,7 +632,6 @@ ViewRawJunkBtn.MouseButton1Click:Connect(function()
             return 
         end
         
-        -- รวบรวมข้อความขยะทั้งหมดมาแสดง
         local fullJunkText = ""
         for i, obj in ipairs(soundObjects) do
             fullJunkText = fullJunkText .. string.format("[%d] %s\nID: %s\n\n", i, obj.Name, obj.SoundId)
@@ -722,11 +639,9 @@ ViewRawJunkBtn.MouseButton1Click:Connect(function()
         
         JunkTextLabel.Text = fullJunkText
         
-        -- ปรับแต่งความสูงของพื้นที่เลื่อนตามจำนวนอักษรอัตโนมัติ
         local textHeight = math.max(400, #fullJunkText * 0.45)
         JunkScroll.CanvasSize = UDim2.new(0, 0, 0, textHeight)
         
-        -- เปิดหน้าต่างขยะ
         JunkFrame.Visible = true
         StatusLabel.Text = "👁️ เปิดหน้าต่างแสดงขยะ RAW เต็มระบบแล้ว"
     else
@@ -734,7 +649,6 @@ ViewRawJunkBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ปุ่มคัดลอกในหน้าต่างขยะ
 JunkCopyBtn.MouseButton1Click:Connect(function()
     if JunkTextLabel.Text ~= "ไม่มีข้อมูล..." then
         copyToClipboard(JunkTextLabel.Text)
@@ -742,7 +656,6 @@ JunkCopyBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ปุ่มย้อนกลับ เพื่อมาหน้าเดิม
 JunkBackBtn.MouseButton1Click:Connect(function()
     JunkFrame.Visible = false
     StatusLabel.Text = "⬅️ ย้อนกลับมาหน้าต่างหลักแล้ว"
@@ -777,7 +690,7 @@ end)
 
 ToggleBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = not MainFrame.Visible
-    if not MainFrame.Visible then JunkFrame.Visible = false end -- ปิดคู่กันถ้าหุบเมนู
+    if not MainFrame.Visible then JunkFrame.Visible = false end
 end)
 
 task.spawn(function()
