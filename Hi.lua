@@ -1,6 +1,6 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- [เวอร์ชันลื่นไหล - ตัดระบบไฮไลท์ออกแล้ว (ลดการกิน CPU 100%)]
+-- [เวอร์ชันแก้ทางค้างลื่นไหลพิเศษ 100% - ปรับปรุงระบบลูปอัปเดต]
 -- ระบบดึงเพลง/เจาะ ID ยังคงทำงานแบบเรียลไทม์ไม่มีดีเลย์
 -- =====================================================
 
@@ -583,10 +583,37 @@ local function refreshPlayers()
                 else
                     StatusLabel.Text = "เลือก: " .. p.DisplayName .. " (@" .. p.Name .. ")"
                 end
+                -- อัปเดตข้อมูล RAW ทันทีเมื่อเปลี่ยนคนเลือก
+                updateJunkViewerLive()
             end)
         end
     end
     ListScroll.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y)
+end
+
+-- ==================== ฟังก์ชันอัปเดตหน้าต่าง RAW ขยะดึงสด ====================
+function updateJunkViewerLive()
+    if not JunkFrame.Visible or not CurrentSelectedPlayer then return end
+    local targetPlayer = Players:FindFirstChild(CurrentSelectedPlayer.Name)
+    if not targetPlayer then return end
+    
+    local soundObjects = checkPlayerAllSounds(targetPlayer)
+    if #soundObjects == 0 then 
+        JunkTextLabel.Text = "❌ ไม่พบออบเจกต์เสียงบนตัวผู้เล่นนี้ (เสียงอาจหยุดเล่นแล้ว)"
+        return 
+    end
+    
+    local fullJunkText = ""
+    for i, obj in ipairs(soundObjects) do
+        fullJunkText = fullJunkText .. string.format("[%d] ออบเจกต์: %s\nID ดั้งเดิม: %s\n\n", i, obj:GetFullName(), obj.SoundId)
+    end
+    
+    if JunkTextLabel.Text ~= fullJunkText then
+        JunkTextLabel.Text = fullJunkText
+        local textBounds = game:GetService("TextService"):GetTextSize(fullJunkText, 11, Enum.Font.Code, Vector2.new(JunkScroll.AbsoluteSize.X - 15, math.huge))
+        JunkTextLabel.Size = UDim2.new(1, -10, 0, textBounds.Y + 20)
+        JunkScroll.CanvasSize = UDim2.new(0, 0, 0, textBounds.Y + 40)
+    end
 end
 
 -- ==================== ปุ่มกดทำงาน ====================
@@ -611,30 +638,6 @@ GetJunkBtn.MouseButton1Click:Connect(function()
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
     end
 end)
-
-local function updateJunkViewerLive()
-    if not JunkFrame.Visible or not CurrentSelectedPlayer then return end
-    local targetPlayer = Players:FindFirstChild(CurrentSelectedPlayer.Name)
-    if not targetPlayer then return end
-    
-    local soundObjects = checkPlayerAllSounds(targetPlayer)
-    if #soundObjects == 0 then 
-        JunkTextLabel.Text = "❌ ไม่พบออบเจกต์เสียงบนตัวผู้เล่นนี้ (เสียงอาจหยุดเล่นแล้ว)"
-        return 
-    end
-    
-    local fullJunkText = ""
-    for i, obj in ipairs(soundObjects) do
-        fullJunkText = fullJunkText .. string.format("[%d] ออบเจกต์: %s\nID ดั้งเดิม: %s\n\n", i, obj:GetFullName(), obj.SoundId)
-    end
-    
-    if JunkTextLabel.Text ~= fullJunkText then
-        JunkTextLabel.Text = fullJunkText
-        local textBounds = game:GetService("TextService"):GetTextSize(fullJunkText, 11, Enum.Font.Code, Vector2.new(JunkScroll.AbsoluteSize.X - 15, math.huge))
-        JunkTextLabel.Size = UDim2.new(1, -10, 0, textBounds.Y + 20)
-        JunkScroll.CanvasSize = UDim2.new(0, 0, 0, textBounds.Y + 40)
-    end
-end
 
 ViewRawJunkBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
@@ -687,20 +690,24 @@ end)
 
 ToggleBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = not MainFrame.Visible
-    if not MainFrame.Visible then JunkFrame.Visible = false end
+    if not MainFrame.Visible then 
+        JunkFrame.Visible = false 
+    else
+        refreshPlayers() -- รีเฟรชข้อมูลเมื่อเปิดหน้าจอขึ้นมาใหม่
+    end
 end)
 
--- ==================== ระบบเรียลไทม์ลูปความถี่สูง ====================
+-- ==================== ระบบจัดการ Event แบบไม่กิน CPU (ลื่นไหล 100%) ====================
+-- ลูปตรวจสอบแบบห่างๆ (ทุกๆ 1 วินาที) เผื่อกันการหลุดรอด ป้องกันอาการแลคจากการลูปถี่ยิบ
 task.spawn(function()
     while true do
-        pcall(function()
-            if MainFrame.Visible then
-                -- อัปเดตรายชื่อและปุ่ม RAW ดิบตามการขยับของข้อมูลเสียงทันที
+        task.wait(1) 
+        if MainFrame.Visible then
+            pcall(function()
                 refreshPlayers()
                 updateJunkViewerLive()
-            end
-        end)
-        task.wait() 
+            end)
+        end
     end
 end)
 
