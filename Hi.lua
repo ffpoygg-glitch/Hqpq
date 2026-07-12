@@ -1,8 +1,8 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- ไม่มีล็อกอิน | ปุ่มขยะกรอง 2 ID | ไม่ส่ง Webhook 
--- ระบบยิงรีโมทเบิ้ลสมบูรณ์ + หน้าต่างดูขยะ RAW เลื่อนอิสระ
--- ปรับปุ่มเจาะดึงไวปึ๊ปทันที (ตัดระบบเช็ค API และ 60 วิ ออก 100%)
+-- [เวอร์ชันสมบูรณ์แบบ 100% รวมโค้ดทั้งหมดพร้อมรัน]
+-- ระบบไฮไลท์เขียวครอบตัว + ข้อความบนหัว + โชว์ขยะเต็มสูบไม่ตัดทิ้ง
+-- ดึงไวปึ๊ปทันที (ไม่มีล็อกอิน | รีโมทเบิ้ลสมบูรณ์ | เลื่อนอิสระ)
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -195,10 +195,62 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
+-- ==================== ระบบไฮไลท์และป้ายชื่อบนหัว (ใหม่เรียบลื่น) ====================
+local function updateRealtimeHighlights()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local activeSounds = checkPlayerAllSounds(player)
+            local char = player.Character
+            local existingHighlight = char:FindFirstChild("Honkuki_Highlight")
+            local existingBillboard = char:FindFirstChild("Honkuki_Billboard")
+
+            if #activeSounds > 0 then
+                -- 1. สร้าง/คงไว้ซึ่ง ไฮไลท์สีเขียวทั้งตัว
+                if not existingHighlight then
+                    local hl = Instance.new("Highlight")
+                    hl.Name = "Honkuki_Highlight"
+                    hl.FillColor = Color3.fromRGB(0, 255, 0)
+                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    hl.FillTransparency = 0.4
+                    hl.OutlineTransparency = 0
+                    hl.Adornee = char
+                    hl.Parent = char
+                end
+
+                -- 2. สร้าง/คงไว้ซึ่ง ข้อความด้านบนหัวบอกชื่อ @
+                if not existingBillboard then
+                    local bb = Instance.new("BillboardGui")
+                    bb.Name = "Honkuki_Billboard"
+                    bb.Size = UDim2.new(0, 250, 0, 50)
+                    bb.AlwaysOnTop = true
+                    bb.StudsOffset = Vector3.new(0, 3.5, 0)
+                    bb.Adornee = char:FindFirstChild("Head") or char.PrimaryPart
+                    
+                    local label = Instance.new("TextLabel")
+                    label.Size = UDim2.new(1, 0, 1, 0)
+                    label.BackgroundTransparency = 1
+                    label.Text = "กำลังเปิดเพลง: @" .. player.Name
+                    label.TextColor3 = Color3.fromRGB(0, 255, 0)
+                    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                    label.TextStrokeTransparency = 0
+                    label.Font = Enum.Font.GothamBold
+                    label.TextSize = 16
+                    label.Parent = bb
+                    
+                    bb.Parent = char
+                end
+            else
+                -- ลบออกทันทีถ้าไม่ได้เปิดเพลงแล้ว
+                if existingHighlight then existingHighlight:Destroy() end
+                if existingBillboard then existingBillboard:Destroy() end
+            end
+        end
+    end
+end
+
 -- ==================== ฟังก์ชันเล่นเพลง (ระบบยิงรีโมทเบิ้ลคู่เด็ดขาด) ====================
 local function playMusicFromId(musicId)
     if not musicId or musicId == "" then
-        warn("No music ID provided.")
         return false
     end
     
@@ -206,32 +258,21 @@ local function playMusicFromId(musicId)
     if re then
         local success1, success2 = false, false
         
-        -- 1. ยิงผ่านรีโมทตัวเดิม (PlayerToolEvent)
         local event1 = re:FindFirstChild("PlayerToolEvent")
         if event1 then
             local args1 = { "ToolMusicText", musicId, "", [4] = true }
             success1 = pcall(function() event1:FireServer(unpack(args1)) end)
         end
         
-        -- 2. ยิงผ่านรีโมทตัวใหม่ (1NoMoto1rVehicle1s) แยกทำงานเด็ดขาด
         local event2 = re:FindFirstChild("1NoMoto1rVehicle1s")
         if event2 then
             local args2 = { "ToolMusicText", musicId, "", [4] = true }
             success2 = pcall(function() event2:FireServer(unpack(args2)) end)
         end
         
-        if success1 or success2 then
-            StatusLabel.Text = "🎵 กำลังเล่นเพลง ID: " .. musicId
-            return true
-        else
-            StatusLabel.Text = "❌ รีโมททำงานล้มเหลว"
-            return false
-        end
-    else
-        warn("RE not found in ReplicatedStorage")
-        StatusLabel.Text = "❌ ไม่พบโฟลเดอร์ RE"
-        return false
+        return success1 or success2
     end
+    return false
 end
 
 -- ==================== ปุ่มขยะ (เล่น + คัดลอกทั้งหมด + กรอง 2 ID) ====================
@@ -243,7 +284,6 @@ local function directLogRawJunk(playerName)
     local firstCleanId = nil
     local allCleanIds = {}
 
-    -- ID ที่ต้องกรองออกสำหรับปุ่มขยะ
     local junkBlockedIDs = {
         ["123728962822472"] = true,
         ["115897193508594"] = true
@@ -255,7 +295,6 @@ local function directLogRawJunk(playerName)
         if string.find(cleanId, "rbxassetid://") then
             cleanId = string.match(cleanId, "rbxassetid://(%d+)") or cleanId
         end
-        -- กรอง ID ที่กำหนดออก (สำหรับปุ่มขยะเท่านั้น)
         if not junkBlockedIDs[cleanId] then
             if not firstCleanId and cleanId ~= "" then
                 firstCleanId = cleanId
@@ -285,7 +324,7 @@ local function directLogRawJunk(playerName)
     return true
 end
 
--- ==================== ปุ่มเจาะ (แก้ไขใหม่: ดึงปุ๊บได้ปั๊บ ไม่เช็ค API / ไม่เช็ค 60 วิ) ====================
+-- ==================== ปุ่มเจาะ (ดึงปุ๊บได้ปั๊บ ไม่เช็ค API / ไม่เช็ค 60 วิ) ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -326,7 +365,6 @@ local function directLogMusicID(playerName)
         return false
     end
 
-    -- รวม ID ทั้งหมดคั่นด้วยเว้นวรรคแล้วโยนเข้าคลิปบอร์ดทันที
     local copyText = table.concat(finalIds, " ")
     copyToClipboard(copyText)
 
@@ -335,7 +373,7 @@ local function directLogMusicID(playerName)
 end
 
 -- =====================================================
--- ส่วน UI (ไม่มีล็อกอิน)
+-- ส่วน UI ทั้งหมด (สร้างโครงสร้างหน้าต่างหลัก + หน้าต่าง RAW)
 -- =====================================================
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
@@ -410,12 +448,12 @@ Instance.new("UICorner", ListScroll).CornerRadius = UDim.new(0, 5)
 local Layout = Instance.new("UIListLayout", ListScroll)
 Layout.Padding = UDim.new(0, 4)
 
-local StatusLabel = Instance.new("TextLabel", MainFrame)
+StatusLabel = Instance.new("TextLabel", MainFrame)
 StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.BackgroundTransparency = 0.9
-StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ (ปุ่มขยะ = ก็อปมาเล่น)"
+StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ (เปิดเพลงมีไฮไลท์เขียว)"
 StatusLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 11
@@ -486,7 +524,7 @@ tStroke.Color = Color3.fromRGB(255, 215, 0)
 tStroke.Thickness = 1.5
 setDrag(ToggleBtn, ToggleBtn)
 
--- ==================== หน้าต่างดูขยะแบบเต็มๆ ====================
+-- ==================== หน้าต่างดูขยะแบบเต็มๆ (โชว์หมดไม่ตัดทิ้ง) ====================
 local JunkFrame = Instance.new("Frame", ScreenGui)
 JunkFrame.Size = UDim2.new(0, 340, 0, 360)
 JunkFrame.Position = UDim2.new(0.5, -170, 0.5, -180)
@@ -508,7 +546,7 @@ local JunkTitle = Instance.new("TextLabel", JunkTopBar)
 JunkTitle.Size = UDim2.new(1, -10, 1, 0)
 JunkTitle.Position = UDim2.new(0, 12, 0, 0)
 JunkTitle.BackgroundTransparency = 1
-JunkTitle.Text = "RAW JUNK VIEWER (ดูขยะเต็มระบบ)"
+JunkTitle.Text = "RAW JUNK VIEWER (ขยะดิบทั้งหมด 100%)"
 JunkTitle.TextColor3 = Color3.fromRGB(200, 100, 255)
 JunkTitle.Font = Enum.Font.GothamBold
 JunkTitle.TextSize = 12
@@ -524,7 +562,7 @@ JunkScroll.ScrollBarImageColor3 = Color3.fromRGB(140, 20, 230)
 Instance.new("UICorner", JunkScroll).CornerRadius = UDim.new(0, 5)
 
 local JunkTextLabel = Instance.new("TextLabel", JunkScroll)
-JunkTextLabel.Size = UDim2.new(1, -10, 0, 1000)
+JunkTextLabel.Size = UDim2.new(1, -10, 0, 0) -- จะขยายขนาดอัตโนมัติตามข้อความจริง
 JunkTextLabel.Position = UDim2.new(0, 5, 0, 5)
 JunkTextLabel.BackgroundTransparency = 1
 JunkTextLabel.Text = "ไม่มีข้อมูล..."
@@ -572,7 +610,7 @@ local function refreshPlayers()
                 PBtn.TextColor3 = Color3.fromRGB(0, 255, 128)
             elseif #activeSounds > 0 then
                 PBtn.Text = "  " .. p.DisplayName .. " (@" .. p.Name .. ") [พบซาวด์บัส 🎵]"
-                PBtn.TextColor3 = Color3.fromRGB(255, 120, 255)
+                PBtn.TextColor3 = Color3.fromRGB(0, 255, 0) -- เปลี่ยนเป็นสีเขียวตอกย้ำความสวยงาม
             else
                 PBtn.Text = "  " .. p.DisplayName .. " (@" .. p.Name .. ")"
                 PBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
@@ -633,17 +671,20 @@ ViewRawJunkBtn.MouseButton1Click:Connect(function()
         end
         
         local fullJunkText = ""
+        -- ดึงมาแสดงผลทั้งหมด 100% ไม่ยอมให้ตัดทิ้งแม้แต่อันเดียว
         for i, obj in ipairs(soundObjects) do
-            fullJunkText = fullJunkText .. string.format("[%d] %s\nID: %s\n\n", i, obj.Name, obj.SoundId)
+            fullJunkText = fullJunkText .. string.format("[%d] ออบเจกต์: %s\nID ดั้งเดิม: %s\n\n", i, obj:GetFullName(), obj.SoundId)
         end
         
         JunkTextLabel.Text = fullJunkText
         
-        local textHeight = math.max(400, #fullJunkText * 0.45)
-        JunkScroll.CanvasSize = UDim2.new(0, 0, 0, textHeight)
+        -- คำนวณขนาด Scrolling อัตโนมัติให้พอดีกับความยาวข้อความขยะทั้งหมด
+        local textBounds = game:GetService("TextService"):GetTextSize(fullJunkText, 11, Enum.Font.Code, Vector2.new(JunkScroll.AbsoluteSize.X - 15, math.huge))
+        JunkTextLabel.Size = UDim2.new(1, -10, 0, textBounds.Y + 20)
+        JunkScroll.CanvasSize = UDim2.new(0, 0, 0, textBounds.Y + 40)
         
         JunkFrame.Visible = true
-        StatusLabel.Text = "👁️ เปิดหน้าต่างแสดงขยะ RAW เต็มระบบแล้ว"
+        StatusLabel.Text = "👁️ เปิดหน้าต่างแสดงขยะ RAW ทั้งหมด 100% แล้ว"
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดูขยะดิบ!"
     end
@@ -693,8 +734,10 @@ ToggleBtn.MouseButton1Click:Connect(function()
     if not MainFrame.Visible then JunkFrame.Visible = false end
 end)
 
+-- ==================== ลูปทำงานเบื้องหลังตรวจจับไฮไลท์เรียลไทม์ ====================
 task.spawn(function()
-    while task.wait(5) do
+    while task.wait(1) do
+        pcall(updateRealtimeHighlights)
         if MainFrame.Visible then
             refreshPlayers()
         end
