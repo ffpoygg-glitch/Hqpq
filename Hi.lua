@@ -1,8 +1,7 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- [เวอร์ชันเรียลไทม์ขีดสุด - อัปเดตทันทีเมื่อเปลี่ยนเพลง 0 วิ]
--- ระบบไฮไลท์เขียวครอบตัว + ข้อความบนหัว + โชว์ขยะเต็มสูบไม่ตัดทิ้ง
--- ดึงไวปึ๊ปทันที (ไม่มีล็อกอิน | รีโมทเบิ้ลสมบูรณ์ | เลื่อนอิสระ)
+-- [เวอร์ชันลื่นไหล - ตัดระบบไฮไลท์ออกแล้ว (ลดการกิน CPU 100%)]
+-- ระบบดึงเพลง/เจาะ ID ยังคงทำงานแบบเรียลไทม์ไม่มีดีเลย์
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -193,59 +192,6 @@ end
 local function copyToClipboard(text)
     local setclip = setclipboard or toclipboard or (Clipboard and Clipboard.set)
     if setclip then setclip(text) end
-end
-
--- ==================== ระบบไฮไลท์และป้ายชื่อบนหัว (อัปเดตแบบเรียลไทม์ขีดสุด) ====================
-local function updateRealtimeHighlights()
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            local activeSounds = checkPlayerAllSounds(player)
-            local char = player.Character
-            local existingHighlight = char:FindFirstChild("Honkuki_Highlight")
-            local existingBillboard = char:FindFirstChild("Honkuki_Billboard")
-
-            if #activeSounds > 0 then
-                -- 1. สร้าง/คงไว้ซึ่ง ไฮไลท์สีเขียวทั้งตัว
-                if not existingHighlight then
-                    local hl = Instance.new("Highlight")
-                    hl.Name = "Honkuki_Highlight"
-                    hl.FillColor = Color3.fromRGB(0, 255, 0)
-                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                    hl.FillTransparency = 0.4
-                    hl.OutlineTransparency = 0
-                    hl.Adornee = char
-                    hl.Parent = char
-                end
-
-                -- 2. สร้าง/คงไว้ซึ่ง ข้อความด้านบนหัวบอกชื่อ @
-                if not existingBillboard then
-                    local bb = Instance.new("BillboardGui")
-                    bb.Name = "Honkuki_Billboard"
-                    bb.Size = UDim2.new(0, 250, 0, 50)
-                    bb.AlwaysOnTop = true
-                    bb.StudsOffset = Vector3.new(0, 3.5, 0)
-                    bb.Adornee = char:FindFirstChild("Head") or char.PrimaryPart
-                    
-                    local label = Instance.new("TextLabel")
-                    label.Size = UDim2.new(1, 0, 1, 0)
-                    label.BackgroundTransparency = 1
-                    label.Text = "กำลังเปิดเพลง: @" .. player.Name
-                    label.TextColor3 = Color3.fromRGB(0, 255, 0)
-                    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-                    label.TextStrokeTransparency = 0
-                    label.Font = Enum.Font.GothamBold
-                    label.TextSize = 16
-                    label.Parent = bb
-                    
-                    bb.Parent = char
-                end
-            else
-                -- ลบออกทันทีถ้าไม่ได้เปิดเพลงแล้ว
-                if existingHighlight then existingHighlight:Destroy() end
-                if existingBillboard then existingBillboard:Destroy() end
-            end
-        end
-    end
 end
 
 -- ==================== ฟังก์ชันเล่นเพลง (ระบบยิงรีโมทเบิ้ลคู่เด็ดขาด) ====================
@@ -453,7 +399,7 @@ StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.BackgroundTransparency = 0.9
-StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ (เปิดเพลงมีไฮไลท์เขียว)"
+StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ"
 StatusLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 11
@@ -609,7 +555,7 @@ local function refreshPlayers()
                 PBtn.Text = "  🛡️ " .. p.DisplayName .. " (@" .. p.Name .. ") [ไวริส]"
                 PBtn.TextColor3 = Color3.fromRGB(0, 255, 128)
             elseif #activeSounds > 0 then
-                PBtn.Text = "  " .. p.DisplayName .. " (@" .. p.Name .. ") [พบซาวด์บัส 🎵]"
+                PBtn.Text = "  " .. p.DisplayName .. " (@" .. p.Name .. ") [เล่นเพลงอยู่ 🎵]"
                 PBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
             else
                 PBtn.Text = "  " .. p.DisplayName .. " (@" .. p.Name .. ")"
@@ -744,19 +690,17 @@ ToggleBtn.MouseButton1Click:Connect(function()
     if not MainFrame.Visible then JunkFrame.Visible = false end
 end)
 
--- ==================== ระบบเรียลไทม์ลูปความถี่สูงเชื่อมต่อสัญญาณการเปลี่ยนแปลง ====================
--- ล้างระบบลูปวินาทีเดิมทิ้งทั้งหมด แล้วผูกเข้ากับคุณสมบัติของ Sound และ ลูปความเร็วสูงสุดสแตนบายรอรับค่า
+-- ==================== ระบบเรียลไทม์ลูปความถี่สูง ====================
 task.spawn(function()
     while true do
         pcall(function()
-            updateRealtimeHighlights()
             if MainFrame.Visible then
                 -- อัปเดตรายชื่อและปุ่ม RAW ดิบตามการขยับของข้อมูลเสียงทันที
                 refreshPlayers()
                 updateJunkViewerLive()
             end
         end)
-        task.wait() -- รันถี่สูงสุดในระดับ Frame-by-Frame เปลี่ยนปุ๊บได้ปั๊บทันที!
+        task.wait() 
     end
 end)
 
