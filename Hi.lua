@@ -1,6 +1,6 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- [เวอร์ชันสมบูรณ์แบบ 100% รวมโค้ดทั้งหมดพร้อมรัน]
+-- [เวอร์ชันเรียลไทม์ขีดสุด - อัปเดตทันทีเมื่อเปลี่ยนเพลง 0 วิ]
 -- ระบบไฮไลท์เขียวครอบตัว + ข้อความบนหัว + โชว์ขยะเต็มสูบไม่ตัดทิ้ง
 -- ดึงไวปึ๊ปทันที (ไม่มีล็อกอิน | รีโมทเบิ้ลสมบูรณ์ | เลื่อนอิสระ)
 -- =====================================================
@@ -195,7 +195,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== ระบบไฮไลท์และป้ายชื่อบนหัว (ใหม่เรียบลื่น) ====================
+-- ==================== ระบบไฮไลท์และป้ายชื่อบนหัว (อัปเดตแบบเรียลไทม์ขีดสุด) ====================
 local function updateRealtimeHighlights()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
@@ -562,7 +562,7 @@ JunkScroll.ScrollBarImageColor3 = Color3.fromRGB(140, 20, 230)
 Instance.new("UICorner", JunkScroll).CornerRadius = UDim.new(0, 5)
 
 local JunkTextLabel = Instance.new("TextLabel", JunkScroll)
-JunkTextLabel.Size = UDim2.new(1, -10, 0, 0) -- จะขยายขนาดอัตโนมัติตามข้อความจริง
+JunkTextLabel.Size = UDim2.new(1, -10, 0, 0)
 JunkTextLabel.Position = UDim2.new(0, 5, 0, 5)
 JunkTextLabel.BackgroundTransparency = 1
 JunkTextLabel.Text = "ไม่มีข้อมูล..."
@@ -610,7 +610,7 @@ local function refreshPlayers()
                 PBtn.TextColor3 = Color3.fromRGB(0, 255, 128)
             elseif #activeSounds > 0 then
                 PBtn.Text = "  " .. p.DisplayName .. " (@" .. p.Name .. ") [พบซาวด์บัส 🎵]"
-                PBtn.TextColor3 = Color3.fromRGB(0, 255, 0) -- เปลี่ยนเป็นสีเขียวตอกย้ำความสวยงาม
+                PBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
             else
                 PBtn.Text = "  " .. p.DisplayName .. " (@" .. p.Name .. ")"
                 PBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
@@ -621,6 +621,11 @@ local function refreshPlayers()
             Instance.new("UICorner", PBtn).CornerRadius = UDim.new(0, 4)
             local bStroke = Instance.new("UIStroke", PBtn)
             bStroke.Color = Color3.fromRGB(40, 40, 40)
+            
+            if CurrentSelectedPlayer == p then
+                bStroke.Color = Color3.fromRGB(255, 215, 0)
+            end
+
             PBtn.MouseButton1Click:Connect(function()
                 for _, b in pairs(ListScroll:GetChildren()) do
                     if b:IsA("TextButton") then b.UIStroke.Color = Color3.fromRGB(40, 40, 40) end
@@ -651,7 +656,7 @@ end)
 GetJunkBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
         StatusLabel.Text = "📦 กำลังก็อปขยะและเล่นเพลงตามขยะ..."
-        task.wait(0.05)
+        task.wait(0.01)
         local result = directLogRawJunk(CurrentSelectedPlayer.Name)
         if not result then
             StatusLabel.Text = "❌ ไม่พบเสียงใด ๆ บนตัวผู้เล่นนี้"
@@ -661,37 +666,42 @@ GetJunkBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-ViewRawJunkBtn.MouseButton1Click:Connect(function()
-    if CurrentSelectedPlayer then
-        local targetPlayer = Players:FindFirstChild(CurrentSelectedPlayer.Name)
-        local soundObjects = checkPlayerAllSounds(targetPlayer)
-        if #soundObjects == 0 then 
-            StatusLabel.Text = "❌ ไม่พบออบเจกต์เสียงบนตัวผู้เล่นนี้"
-            return 
-        end
-        
-        local fullJunkText = ""
-        -- ดึงมาแสดงผลทั้งหมด 100% ไม่ยอมให้ตัดทิ้งแม้แต่อันเดียว
-        for i, obj in ipairs(soundObjects) do
-            fullJunkText = fullJunkText .. string.format("[%d] ออบเจกต์: %s\nID ดั้งเดิม: %s\n\n", i, obj:GetFullName(), obj.SoundId)
-        end
-        
+local function updateJunkViewerLive()
+    if not JunkFrame.Visible or not CurrentSelectedPlayer then return end
+    local targetPlayer = Players:FindFirstChild(CurrentSelectedPlayer.Name)
+    if not targetPlayer then return end
+    
+    local soundObjects = checkPlayerAllSounds(targetPlayer)
+    if #soundObjects == 0 then 
+        JunkTextLabel.Text = "❌ ไม่พบออบเจกต์เสียงบนตัวผู้เล่นนี้ (เสียงอาจหยุดเล่นแล้ว)"
+        return 
+    end
+    
+    local fullJunkText = ""
+    for i, obj in ipairs(soundObjects) do
+        fullJunkText = fullJunkText .. string.format("[%d] ออบเจกต์: %s\nID ดั้งเดิม: %s\n\n", i, obj:GetFullName(), obj.SoundId)
+    end
+    
+    if JunkTextLabel.Text ~= fullJunkText then
         JunkTextLabel.Text = fullJunkText
-        
-        -- คำนวณขนาด Scrolling อัตโนมัติให้พอดีกับความยาวข้อความขยะทั้งหมด
         local textBounds = game:GetService("TextService"):GetTextSize(fullJunkText, 11, Enum.Font.Code, Vector2.new(JunkScroll.AbsoluteSize.X - 15, math.huge))
         JunkTextLabel.Size = UDim2.new(1, -10, 0, textBounds.Y + 20)
         JunkScroll.CanvasSize = UDim2.new(0, 0, 0, textBounds.Y + 40)
-        
+    end
+end
+
+ViewRawJunkBtn.MouseButton1Click:Connect(function()
+    if CurrentSelectedPlayer then
         JunkFrame.Visible = true
-        StatusLabel.Text = "👁️ เปิดหน้าต่างแสดงขยะ RAW ทั้งหมด 100% แล้ว"
+        updateJunkViewerLive()
+        StatusLabel.Text = "👁️ เปิดหน้าต่างแสดงขยะ RAW เรียลไทม์ 100% แล้ว"
     else
-        StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดูขยะดิบ!"
+        StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นในตารางก่อนกดดูขยะดิบ!"
     end
 end)
 
 JunkCopyBtn.MouseButton1Click:Connect(function()
-    if JunkTextLabel.Text ~= "ไม่มีข้อมูล..." then
+    if JunkTextLabel.Text ~= "ไม่มีข้อมูล..." and not string.find(JunkTextLabel.Text, "❌") then
         copyToClipboard(JunkTextLabel.Text)
         StatusLabel.Text = "📋 คัดลอกขยะ RAW ทั้งหมดไปคลิปบอร์ดแล้ว!"
     end
@@ -734,13 +744,19 @@ ToggleBtn.MouseButton1Click:Connect(function()
     if not MainFrame.Visible then JunkFrame.Visible = false end
 end)
 
--- ==================== ลูปทำงานเบื้องหลังตรวจจับไฮไลท์เรียลไทม์ ====================
+-- ==================== ระบบเรียลไทม์ลูปความถี่สูงเชื่อมต่อสัญญาณการเปลี่ยนแปลง ====================
+-- ล้างระบบลูปวินาทีเดิมทิ้งทั้งหมด แล้วผูกเข้ากับคุณสมบัติของ Sound และ ลูปความเร็วสูงสุดสแตนบายรอรับค่า
 task.spawn(function()
-    while task.wait(1) do
-        pcall(updateRealtimeHighlights)
-        if MainFrame.Visible then
-            refreshPlayers()
-        end
+    while true do
+        pcall(function()
+            updateRealtimeHighlights()
+            if MainFrame.Visible then
+                -- อัปเดตรายชื่อและปุ่ม RAW ดิบตามการขยับของข้อมูลเสียงทันที
+                refreshPlayers()
+                updateJunkViewerLive()
+            end
+        end)
+        task.wait() -- รันถี่สูงสุดในระดับ Frame-by-Frame เปลี่ยนปุ๊บได้ปั๊บทันที!
     end
 end)
 
