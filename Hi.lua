@@ -1,7 +1,7 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- [เวอร์ชันแก้ทางค้างลื่นไหลพิเศษ 100% - ปรับปรุงระบบลูปอัปเดต]
--- ระบบดึงเพลง/เจาะ ID ยังคงทำงานแบบเรียลไทม์ไม่มีดีเลย์
+-- [เวอร์ชันสั่งทำพิเศษ - เล่นเพลงไม่ก็อป / เพิ่มปุ่มก็อป RAW แยก / ลบไวริส]
+-- โครงสร้างและลอจิกคงเดิม 100% ลื่นไหลไม่ค้าง
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -12,7 +12,6 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer.PlayerGui
 
 local CurrentSelectedPlayer = nil
-local WhitelistPlayers = {}
 
 -- ==================== บล็อค ID ปลอม (ใช้กับปุ่มเจาะ) ====================
 local BlockedIDs = {
@@ -221,15 +220,13 @@ local function playMusicFromId(musicId)
     return false
 end
 
--- ==================== ปุ่มขยะ (เล่น + คัดลอกทั้งหมด + กรอง 2 ID) ====================
-local function directLogRawJunk(playerName)
+-- ==================== ปุ่มขยะ (เล่นอย่างเดียว ไม่คัดลอกลงคลิปบอร์ดแล้ว) ====================
+local function directPlayJunkOnly(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
     if #soundObjects == 0 then return false end
 
     local firstCleanId = nil
-    local allCleanIds = {}
-
     local junkBlockedIDs = {
         ["123728962822472"] = true,
         ["115897193508594"] = true
@@ -244,9 +241,7 @@ local function directLogRawJunk(playerName)
         if not junkBlockedIDs[cleanId] then
             if not firstCleanId and cleanId ~= "" then
                 firstCleanId = cleanId
-            end
-            if cleanId ~= "" then
-                table.insert(allCleanIds, cleanId)
+                break -- เจอตัวแรกที่ต้องการใช้งานแล้วหยุดลูปได้เลยเพื่อความไว
             end
         end
     end
@@ -258,15 +253,30 @@ local function directLogRawJunk(playerName)
 
     local played = playMusicFromId(firstCleanId)
     if played then
-        StatusLabel.Text = "✅ เล่นเพลงสำเร็จ: " .. firstCleanId
+        StatusLabel.Text = "✅ เปิดเพลงตามขยะสำเร็จ: " .. firstCleanId
+        return true
     else
-        StatusLabel.Text = "❌ เล่นเพลงไม่สำเร็จ (ดู Console)"
+        StatusLabel.Text = "❌ เล่นเพลงไม่สำเร็จ"
+        return false
+    end
+end
+
+-- ==================== ปุ่มพิเศษเพิ่มมาใหม่ (ก็อปปี้ RAW จิบทั้งหมดส่งตรง) ====================
+local function copyAllRawJunkText(playerName)
+    local targetPlayer = Players:FindFirstChild(playerName)
+    local soundObjects = checkPlayerAllSounds(targetPlayer)
+    if #soundObjects == 0 then 
+        StatusLabel.Text = "❌ ไม่พบขยะใดๆ ให้คัดลอก"
+        return false 
     end
 
-    local clipboardText = table.concat(allCleanIds, "\n")
-    copyToClipboard(clipboardText)
-    StatusLabel.Text = "📋 คัดลอก " .. #allCleanIds .. " ID ไปคลิปบอร์ดแล้ว"
+    local fullJunkText = ""
+    for i, obj in ipairs(soundObjects) do
+        fullJunkText = fullJunkText .. string.format("[%d] ออบเจกต์: %s\nID ดั้งเดิม: %s\n\n", i, obj:GetFullName(), obj.SoundId)
+    end
 
+    copyToClipboard(fullJunkText)
+    StatusLabel.Text = "📋 คัดลอกขยะ RAW ดิบทั้งหมดแล้ว!"
     return true
 end
 
@@ -319,7 +329,7 @@ local function directLogMusicID(playerName)
 end
 
 -- =====================================================
--- ส่วน UI ทั้งหมด (สร้างโครงสร้างหน้าต่างหลัก + หน้าต่าง RAW)
+-- ส่วน UI ทั้งหมด (ปรับขนาดและตำแหน่งปุ่มรองรับโครงสร้างใหม่)
 -- =====================================================
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
@@ -420,7 +430,7 @@ local GetJunkBtn = Instance.new("TextButton", MainFrame)
 GetJunkBtn.Size = UDim2.new(0.9, 0, 0, 34)
 GetJunkBtn.Position = UDim2.new(0.05, 0, 0.67, 0)
 GetJunkBtn.BackgroundColor3 = Color3.fromRGB(230, 90, 40)
-GetJunkBtn.Text = "ดึงขยะ (เล่นเพลง + คัดลอกทั้งหมด)"
+GetJunkBtn.Text = "เปิดเพลงตามขยะอย่างเดียว (Play Junk)"
 GetJunkBtn.Font = Enum.Font.GothamBold
 GetJunkBtn.TextSize = 11
 GetJunkBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -436,15 +446,16 @@ ViewRawJunkBtn.TextSize = 11
 ViewRawJunkBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", ViewRawJunkBtn).CornerRadius = UDim.new(0, 6)
 
-local WhitelistBtn = Instance.new("TextButton", MainFrame)
-WhitelistBtn.Size = UDim2.new(0.9, 0, 0, 32)
-WhitelistBtn.Position = UDim2.new(0.05, 0, 0.83, 0)
-WhitelistBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-WhitelistBtn.Text = "เพิ่ม / ลบ รายชื่อไวริส (Whitelist)"
-WhitelistBtn.Font = Enum.Font.GothamBold
-WhitelistBtn.TextSize = 11
-WhitelistBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-Instance.new("UICorner", WhitelistBtn).CornerRadius = UDim.new(0, 6)
+-- [ปุ่มใหม่ที่สั่งเพิ่ม] คัดลอกขยะดิบ RAW ทันทีโดยไม่ต้องเปิดหน้าต่างใหม่
+local CopyJunkBtn = Instance.new("TextButton", MainFrame)
+CopyJunkBtn.Size = UDim2.new(0.9, 0, 0, 32)
+CopyJunkBtn.Position = UDim2.new(0.05, 0, 0.83, 0)
+CopyJunkBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+CopyJunkBtn.Text = "📋 คัดลอกขยะ RAW ดิบทั้งหมด"
+CopyJunkBtn.Font = Enum.Font.GothamBold
+CopyJunkBtn.TextSize = 11
+CopyJunkBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", CopyJunkBtn).CornerRadius = UDim.new(0, 6)
 
 local RefreshBtn = Instance.new("TextButton", MainFrame)
 RefreshBtn.Size = UDim2.new(0.9, 0, 0, 26)
@@ -470,7 +481,7 @@ tStroke.Color = Color3.fromRGB(255, 215, 0)
 tStroke.Thickness = 1.5
 setDrag(ToggleBtn, ToggleBtn)
 
--- ==================== หน้าต่างดูขยะแบบเต็มๆ (โชว์หมดไม่ตัดทิ้ง) ====================
+-- ==================== หน้าต่างดูขยะแบบเต็มๆ ====================
 local JunkFrame = Instance.new("Frame", ScreenGui)
 JunkFrame.Size = UDim2.new(0, 340, 0, 360)
 JunkFrame.Position = UDim2.new(0.5, -170, 0.5, -180)
@@ -551,10 +562,8 @@ local function refreshPlayers()
             PBtn.Size = UDim2.new(1, -6, 0, 30)
             PBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
             local activeSounds = checkPlayerAllSounds(p)
-            if WhitelistPlayers[p.Name] then
-                PBtn.Text = "  🛡️ " .. p.DisplayName .. " (@" .. p.Name .. ") [ไวริส]"
-                PBtn.TextColor3 = Color3.fromRGB(0, 255, 128)
-            elseif #activeSounds > 0 then
+            
+            if #activeSounds > 0 then
                 PBtn.Text = "  " .. p.DisplayName .. " (@" .. p.Name .. ") [เล่นเพลงอยู่ 🎵]"
                 PBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
             else
@@ -578,12 +587,7 @@ local function refreshPlayers()
                 end
                 bStroke.Color = Color3.fromRGB(255, 215, 0)
                 CurrentSelectedPlayer = p
-                if WhitelistPlayers[p.Name] then
-                    StatusLabel.Text = "เลือก: " .. p.DisplayName .. " (@" .. p.Name .. ") (สถานะ: ไวริสอยู่)"
-                else
-                    StatusLabel.Text = "เลือก: " .. p.DisplayName .. " (@" .. p.Name .. ")"
-                end
-                -- อัปเดตข้อมูล RAW ทันทีเมื่อเปลี่ยนคนเลือก
+                StatusLabel.Text = "เลือก: " .. p.DisplayName .. " (@" .. p.Name .. ")"
                 updateJunkViewerLive()
             end)
         end
@@ -628,14 +632,14 @@ end)
 
 GetJunkBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "📦 กำลังก็อปขยะและเล่นเพลงตามขยะ..."
+        StatusLabel.Text = "🎵 กำลังยิงคำสั่งเปิดเพลงตามขยะ..."
         task.wait(0.01)
-        local result = directLogRawJunk(CurrentSelectedPlayer.Name)
+        local result = directPlayJunkOnly(CurrentSelectedPlayer.Name)
         if not result then
             StatusLabel.Text = "❌ ไม่พบเสียงใด ๆ บนตัวผู้เล่นนี้"
         end
     else
-        StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
+        StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนเปิดเพลง!"
     end
 end)
 
@@ -646,6 +650,15 @@ ViewRawJunkBtn.MouseButton1Click:Connect(function()
         StatusLabel.Text = "👁️ เปิดหน้าต่างแสดงขยะ RAW เรียลไทม์ 100% แล้ว"
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นในตารางก่อนกดดูขยะดิบ!"
+    end
+end)
+
+-- [ปุ่มสั่งทำงานของระบบคัดลอกใหม่]
+CopyJunkBtn.MouseButton1Click:Connect(function()
+    if CurrentSelectedPlayer then
+        copyAllRawJunkText(CurrentSelectedPlayer.Name)
+    else
+        StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นในตารางก่อนกดคัดลอก!"
     end
 end)
 
@@ -661,21 +674,6 @@ JunkBackBtn.MouseButton1Click:Connect(function()
     StatusLabel.Text = "⬅️ ย้อนกลับมาหน้าต่างหลักแล้ว"
 end)
 
-WhitelistBtn.MouseButton1Click:Connect(function()
-    if CurrentSelectedPlayer then
-        if WhitelistPlayers[CurrentSelectedPlayer.Name] then
-            WhitelistPlayers[CurrentSelectedPlayer.Name] = nil
-            StatusLabel.Text = "🗑️ ลบ @" .. CurrentSelectedPlayer.Name .. " ออกจากตารางไวริสแล้ว"
-        else
-            WhitelistPlayers[CurrentSelectedPlayer.Name] = true
-            StatusLabel.Text = "✅ เพิ่ม @" .. CurrentSelectedPlayer.Name .. " เข้าตารางไวริสเรียบร้อย!"
-        end
-        refreshPlayers()
-    else
-        StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นในตารางก่อนกดตั้งค่าไวริส!"
-    end
-end)
-
 RefreshBtn.MouseButton1Click:Connect(refreshPlayers)
 
 Players.PlayerAdded:Connect(refreshPlayers)
@@ -684,7 +682,6 @@ Players.PlayerRemoving:Connect(function(p)
         CurrentSelectedPlayer = nil
         StatusLabel.Text = "โปรดเลือกผู้เล่น..."
     end
-    if WhitelistPlayers[p.Name] then WhitelistPlayers[p.Name] = nil end
     refreshPlayers()
 end)
 
@@ -693,12 +690,11 @@ ToggleBtn.MouseButton1Click:Connect(function()
     if not MainFrame.Visible then 
         JunkFrame.Visible = false 
     else
-        refreshPlayers() -- รีเฟรชข้อมูลเมื่อเปิดหน้าจอขึ้นมาใหม่
+        refreshPlayers()
     end
 end)
 
--- ==================== ระบบจัดการ Event แบบไม่กิน CPU (ลื่นไหล 100%) ====================
--- ลูปตรวจสอบแบบห่างๆ (ทุกๆ 1 วินาที) เผื่อกันการหลุดรอด ป้องกันอาการแลคจากการลูปถี่ยิบ
+-- ==================== ระบบจัดการ Event แบบไม่กิน CPU ====================
 task.spawn(function()
     while true do
         task.wait(1) 
